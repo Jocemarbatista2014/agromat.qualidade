@@ -427,7 +427,7 @@ a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
 
       var act = el('div', 'rowact');
       act.appendChild(shareButtons(r, false));
-      if (state.canWrite) {
+      if (state.canWrite && !sheetCfg) {
         var del = el('button', 'linkbtn', 'Excluir registro');
         del.type = 'button';
         var timer = null;
@@ -471,7 +471,79 @@ a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
     h.textContent = msg;
   }
 
+  /* ---------- planilha do Google (opcional) ---------- */
+  var CFG_KEY = 'classificacao-graos-cfg';
+  var CACHE_KEY = 'classificacao-graos-cache';
+  var sheetCfg = null;
+
+  function loadCfg() {
+    try {
+      var m = /[#&]cfg=([^&]+)/.exec(location.hash || '');
+      if (m) {
+        var o = JSON.parse(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')));
+        if (o && o.u && o.k && /^https:\/\/script\.google\.com\/(a\/[^\/]+\/)?macros\/s\//.test(o.u)) {
+          localStorage.setItem(CFG_KEY, JSON.stringify({ u: o.u, k: String(o.k) }));
+        }
+        try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+      }
+    } catch (e) {}
+    try {
+      var t = localStorage.getItem(CFG_KEY);
+      if (t) { var c = JSON.parse(t); if (c && c.u && c.k) return c; }
+    } catch (e) {}
+    return null;
+  }
+
+  function newId() { return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+  async function sheetCall(url, init) {
+    var ctl = new AbortController();
+    var timer = setTimeout(function () { ctl.abort(); }, 25000);
+    try {
+      init.signal = ctl.signal;
+      var res = await fetch(url, init);
+      var j = await res.json();
+      if (!j || !j.ok) throw new Error((j && j.erro) || 'erro');
+      return j;
+    } finally { clearTimeout(timer); }
+  }
+
+  async function remoteSave(rec) {
+    var j = await sheetCall(sheetCfg.u, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ acao: 'salvar', chave: sheetCfg.k, registro: rec })
+    });
+    return j.numero;
+  }
+
+  var refreshing = false;
+  async function refreshRemote() {
+    if (!sheetCfg || refreshing) return;
+    refreshing = true;
+    try {
+      var j = await sheetCall(sheetCfg.u + '?chave=' + encodeURIComponent(sheetCfg.k) + '&_=' + Date.now(), {});
+      state.records = j.registros || [];
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(state.records.slice(0, 200))); } catch (e) {}
+      setSync('cloud', 'Conectado à planilha da empresa. Mostra os registros de todos os aparelhos.');
+    } catch (e) {
+      try { state.records = JSON.parse(localStorage.getItem(CACHE_KEY) || '[]'); } catch (e2) { state.records = []; }
+      setSync('local', e && e.message === 'chave'
+        ? 'Código de acesso não aceito. Peça um novo link ao responsável.'
+        : 'Sem conexão com a planilha. Mostrando o último histórico carregado.');
+    }
+    refreshing = false;
+    renderHistory();
+  }
+
   async function addRecord(rec) {
+    if (sheetCfg) {
+      rec.id = newId();
+      rec.numero = await remoteSave(rec);
+      state.records.unshift(rec);
+      renderHistory();
+      return;
+    }
     if (col) {
       await col.add(rec);
     } else {
@@ -951,9 +1023,12 @@ a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
       obs: $('obs').value.trim()
     };
     var btn = $('save');
+    var btnLabel = btn.textContent;
     btn.disabled = true;
+    if (sheetCfg) btn.textContent = 'Salvando…';
     try {
       await addRecord(rec);
+      btn.textContent = btnLabel;
       try { localStorage.setItem(RESP_KEY, rec.responsavel); } catch (e) {}
       $('placa').value = ''; $('pa').value = ''; $('pc').value = ''; $('nf').value = ''; $('carga').value = ''; $('descarga').value = ''; $('obs').value = '';
       state.vals = {};
@@ -964,7 +1039,11 @@ a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
       showDone(rec);
     } catch (e) {
       if (e && e.code === 'invalid_argument') { state.canWrite = false; validate(); renderHistory(); }
-      else { showError('Não foi possível salvar. Confira a conexão e tente de novo.'); btn.disabled = false; }
+      else {
+        btn.textContent = btnLabel;
+        showError(sheetCfg ? 'Sem conexão com a planilha. Nada foi salvo e os dados continuam na tela. Tente de novo.' : 'Não foi possível salvar. Confira a conexão e tente de novo.');
+        btn.disabled = false;
+      }
     }
   });
 
@@ -977,6 +1056,7 @@ a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
 
   (async function boot() {
     var db = null, user = null, dl = null;
+    sheetCfg = loadCfg();
     async function useCap(name) {
       try { return window.claude && window.claude.use ? await window.claude.use(name) : null; } catch (e) { return null; }
     }
@@ -985,7 +1065,11 @@ a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
     dl = await useCap('downloads');
     assetsCap = await useCap('assets');
 
-    if (db) {
+    if (sheetCfg) {
+      validate();
+      await refreshRemote();
+      document.addEventListener('visibilitychange', function () { if (!document.hidden) refreshRemote(); });
+    } else if (db) {
       try { if (user) { var can = await user.can('data.write'); if (can === false) state.canWrite = false; } } catch (e) {}
       col = db.collection('classificacoes');
       setSync('cloud', 'Registros salvos na nuvem e visíveis para o gerente.');
