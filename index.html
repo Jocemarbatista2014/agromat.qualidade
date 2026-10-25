@@ -235,7 +235,7 @@ a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
         <div class="done" id="done" hidden>
           <strong id="doneTitle">Laudo pronto para enviar</strong>
           <div id="doneBtns"></div>
-          <p class="hint">Se o PDF não baixar, toque em Laudo em imagem, segure o dedo sobre a imagem e compartilhe no WhatsApp. O botão escuro abre o WhatsApp com o resumo escrito.</p>
+          <p class="hint">Toque em Compartilhar laudo (PDF) e escolha o WhatsApp: o PDF segue anexado. Se não funcionar, use Laudo em imagem: segure o dedo sobre a imagem e compartilhe. O botão escuro abre o WhatsApp só com o resumo escrito.</p>
         </div>
       </div>
     </form>
@@ -496,7 +496,32 @@ a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
   }
 
   /* ---------- planilha ---------- */
-  var exporter = null;
+  var exporter = {
+    save: async function (o) {
+      var isPdf = /\.pdf$/i.test(o.filename);
+      var blob = new Blob([o.data], { type: isPdf ? 'application/pdf' : 'text/csv;charset=utf-8' });
+      if (isPdf && window.File && navigator.canShare && navigator.share) {
+        var file = new File([blob], o.filename, { type: 'application/pdf' });
+        var can = false;
+        try { can = navigator.canShare({ files: [file] }); } catch (e) {}
+        if (can) {
+          try {
+            await navigator.share({ files: [file], title: 'Laudo de classificação' });
+            return { status: 'saved' };
+          } catch (e) {
+            if (e && e.name === 'AbortError') throw { code: 'declined' };
+            if (e && e.name === 'NotAllowedError') throw { code: 'gesture' };
+          }
+        }
+      }
+      var u = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = u; a.download = o.filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(u); }, 15000);
+      return { status: 'saved' };
+    }
+  };
   function csvCell(v) {
     var s = v == null ? '' : String(v);
     return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
@@ -804,47 +829,55 @@ a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
     linkRow.hidden = true;
     linkRow.style.cssText = 'flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px';
 
-    var b = el('button', cls, 'Baixar laudo (PDF)');
+    var cachedBuf = null, cached = null;
+    function getBuf() {
+      if (!cached) {
+        cached = ensurePdfLib().then(function (ok) {
+          if (!ok) throw { code: 'lib' };
+          return makePdf(r);
+        }).then(function (buf) { cachedBuf = buf; return buf; });
+        cached.catch(function () { cached = null; });
+      }
+      return cached;
+    }
+    if (big) getBuf().catch(function () {});
+
+    var PDF_LABEL = 'Compartilhar laudo (PDF)';
+    var b = el('button', cls, PDF_LABEL);
     b.type = 'button';
     b.addEventListener('click', async function () {
-      var label = b.textContent;
       msg.hidden = true;
       linkRow.hidden = true;
-      b.disabled = true; b.textContent = 'Gerando PDF…';
+      b.disabled = true;
       try {
-        if (!(await ensurePdfLib())) throw { code: 'lib' };
-        var buf = await makePdf(r);
-        var done = false;
-        if (exporter) {
-          try { await exporter.save({ filename: pdfName(r), data: buf.slice(0) }); done = true; }
-          catch (e) { if (e && e.code === 'declined') done = true; }
-        }
-        if (!done && assetsCap) {
-          var up = await assetsCap.upload(new File([buf], pdfName(r), { type: 'application/pdf' }));
-          linkRow.textContent = '';
-          var open = el('a', 'ghost solid', 'Abrir laudo em PDF');
-          open.href = up.url; open.target = '_blank'; open.rel = 'noopener noreferrer';
-          linkRow.appendChild(open);
-          linkRow.appendChild(el('span', 'hint', 'O PDF abre em outra aba. Use o menu do navegador para baixar ou compartilhar.'));
-          linkRow.hidden = false;
-          done = true;
-        }
-        if (!done) {
-          var blobUrl = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
-          linkRow.textContent = '';
-          var bo = el('a', 'ghost solid', 'Abrir laudo em PDF');
-          bo.href = blobUrl; bo.target = '_blank'; bo.rel = 'noopener noreferrer';
-          linkRow.appendChild(bo);
-          linkRow.appendChild(el('span', 'hint', 'Se o PDF não abrir neste navegador, use o botão do WhatsApp para enviar o resumo em texto.'));
-          linkRow.hidden = false;
-        }
+        var buf = cachedBuf;
+        if (!buf) { b.textContent = 'Gerando PDF…'; buf = await getBuf(); }
+        await exporter.save({ filename: pdfName(r), data: buf.slice(0) });
       } catch (e) {
-        msg.textContent = e && e.code === 'lib'
-          ? 'A biblioteca de PDF não carregou. Confira a internet e tente de novo.'
-          : 'Não foi possível salvar o PDF neste aparelho. Use o botão do WhatsApp para enviar o resumo em texto.';
-        msg.hidden = false;
+        if (e && e.code === 'gesture') {
+          b.textContent = 'Toque de novo para compartilhar';
+          b.disabled = false;
+          return;
+        }
+        if (!(e && e.code === 'declined')) {
+          if (cachedBuf) {
+            var blobUrl = URL.createObjectURL(new Blob([cachedBuf], { type: 'application/pdf' }));
+            linkRow.textContent = '';
+            var bo = el('a', 'ghost solid', 'Abrir laudo em PDF');
+            bo.href = blobUrl; bo.target = '_blank'; bo.rel = 'noopener noreferrer';
+            linkRow.appendChild(bo);
+            linkRow.appendChild(el('span', 'hint', 'Se o PDF não abrir neste navegador, use o botão do WhatsApp para enviar o resumo em texto.'));
+            linkRow.hidden = false;
+          } else {
+            msg.textContent = e && e.code === 'lib'
+              ? 'A biblioteca de PDF não carregou. Confira a internet e tente de novo.'
+              : 'Não foi possível gerar o PDF neste aparelho. Use o botão do WhatsApp para enviar o resumo em texto.';
+            msg.hidden = false;
+          }
+        }
       }
-      b.disabled = false; b.textContent = label;
+      b.disabled = false;
+      b.textContent = PDF_LABEL;
     });
     box.appendChild(b);
 
@@ -951,7 +984,6 @@ a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
     db = await useCap('db');
     dl = await useCap('downloads');
     assetsCap = await useCap('assets');
-    exporter = dl || null;
 
     if (db) {
       try { if (user) { var can = await user.can('data.write'); if (can === false) state.canWrite = false; } } catch (e) {}
@@ -969,7 +1001,7 @@ a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
       validate();
     } else {
       state.records = lsRead();
-      setSync('local', 'Registros ficam só neste aparelho. Abra o link com a sua conta para salvar na nuvem.');
+      setSync('local', 'Registros salvos neste aparelho.');
       renderHistory();
     }
   })();
