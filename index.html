@@ -294,9 +294,8 @@ a.ghost { display: inline-flex; align-items: center; text-decoration: none; }
   function optionValues(key) {
     var a = [], i;
     if (key === 'umidade') { for (i = 80; i <= 250; i++) a.push(i / 10); return a; }
-    for (i = 0; i <= 30; i++) a.push(i / 10);
-    for (i = 35; i <= 100; i += 5) a.push(i / 10);
-    for (i = 11; i <= 30; i++) a.push(i);
+    for (i = 0; i <= 300; i++) a.push(i / 10);
+    for (i = 31; i <= 100; i++) a.push(i);
     return a;
   }
 
