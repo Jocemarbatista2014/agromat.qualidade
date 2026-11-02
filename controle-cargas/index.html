@@ -152,6 +152,8 @@ table.rt { width: 100%; border-collapse: collapse; font-variant-numeric: tabular
 .reading { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .warnbox { background: var(--warn-bg); color: var(--warn-fg); border-radius: 6px; padding: 8px 12px; font-size: 14px; }
 .warnbox ul { margin: 4px 0 0; padding-left: 18px; }
+.warnbox.red, .err.alert { background: var(--st-cancelada-bg); color: var(--st-cancelada-fg); border: 1px solid var(--danger); font-weight: 600; }
+.err.alert { border-radius: 6px; padding: 8px 12px; font-size: 14px; }
 details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; margin-bottom: 10px; }
 .pick { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .pick .info { min-width: 0; flex: 1 1 220px; overflow-wrap: anywhere; }
@@ -759,7 +761,7 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
       var dd = achaPlaca(g("c-placa"), it ? it.id : null);
       if (dd.length && placaAtiva(dd) && dupOk !== normPlaca(g("c-placa"))) {
         dupOk = normPlaca(g("c-placa"));
-        err.textContent = "Atenção: a placa " + dupOk + " já foi enviada em " + descCarga(dd[0]) + ". Toque em Salvar de novo para manter.";
+        err.className = "err alert"; err.textContent = "Atenção: a placa " + dupOk + " já foi enviada em " + descCarga(dd[0]) + ". Toque em Salvar de novo para manter.";
         return;
       }
       var data = Object.assign(it ? stripId(it) : {}, {
@@ -1277,7 +1279,7 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
       put(box, 
         st.preview ? h("img", { class: "thumb", src: st.preview, alt: "Ordem enviada" }) : null,
         o.avisos.length ? h("div", { class: "warnbox" }, "Confira antes de continuar:", h("ul", {}, o.avisos.map(function (a) { return h("li", {}, a); }))) : null,
-        achaPlaca(o.placa).length ? h("div", { class: "warnbox" }, "A placa " + o.placa + " já foi enviada:",
+        achaPlaca(o.placa).length ? h("div", { class: "warnbox red" }, "A placa " + o.placa + " já foi enviada:",
           h("ul", {}, achaPlaca(o.placa).slice(0, 3).map(function (i) { return h("li", {}, descCarga(i)); }))) : null,
         h("div", { class: "grid2" },
           fld("o-placa", "Placa" + (o.miss.placa ? " (não encontrada)" : ""), inp("o-placa", "text", o.placa, { maxlength: "8", autocomplete: "off", class: "upper" }), o.miss.placa ? "missing" : ""),
@@ -1308,7 +1310,7 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
     var dups = achaPlaca(o.placa);
     if (dups.length && placaAtiva(dups) && st.dupOk !== o.placa) {
       st.dupOk = o.placa;
-      err.textContent = "Atenção: a placa " + o.placa + " já foi enviada em " + descCarga(dups[0]) + ". Toque em Escolher contrato de novo para continuar.";
+      err.className = "err alert"; err.textContent = "Atenção: a placa " + o.placa + " já foi enviada em " + descCarga(dups[0]) + ". Toque em Escolher contrato de novo para continuar.";
       return;
     }
     openPicker({ produto: o.produto, tons: ton, resumo: "Placa " + o.placa + " · " + fmtT(ton) + (o.transp ? " · " + o.transp : ""),
