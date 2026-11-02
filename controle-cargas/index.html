@@ -55,7 +55,7 @@ h1 { font-family: var(--font-display); font-weight: 700; font-size: 28px; line-h
 .tab { background: none; border: 0; border-bottom: 3px solid transparent; padding: 8px 14px; cursor: pointer; font-weight: 600; color: var(--muted); margin-bottom: -1px; }
 .tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
 
-.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; min-width: 0; }
 .tile .lbl { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .tile .val { font-family: var(--font-display); font-weight: 700; font-size: 30px; line-height: 1.15; margin-top: 4px; font-variant-numeric: tabular-nums; }
@@ -163,8 +163,9 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
 #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: max(16px, env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--bg);
   border-radius: 6px; padding: 8px 14px; font-size: 14px; z-index: 30; max-width: calc(100% - 32px); }
 
-@media (max-width: 860px) {
+@media (max-width: 560px) {
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tiles .tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 @media (max-width: 720px) {
   .row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "status load" "route route" "actions actions"; }
@@ -408,14 +409,10 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
     var andamento = items.filter(function (i) { return ["carregando", "transito", "descarregando"].indexOf(i.status) >= 0; });
     var tr = items.filter(function (i) { return i.status === "transito"; });
     var hoje = items.filter(function (i) { return i.status === "entregue" && i.entregueEm === today; });
-    var fr = items.filter(function (i) { return i.status !== "cancelada" && Number(i.frete) > 0 && Number(i.toneladas) > 0; });
-    var tons = sum(fr, function (i) { return i.toneladas; });
-    var media = tons ? sum(fr, function (i) { return i.frete * i.toneladas; }) / tons : 0;
     var defs = [
       ["Agendadas", String(ag.length), fmtT(sum(ag, function (i) { return i.toneladas; })) + " programadas"],
       ["Em andamento", String(andamento.length), fmtT(sum(tr, function (i) { return i.toneladas; })) + " em trânsito"],
-      ["Entregues hoje", String(hoje.length), fmtT(sum(hoje, function (i) { return i.toneladas; })) + " descarregadas"],
-      ["Frete médio", media ? fmtBRL(media) : "—", "por tonelada, cargas ativas"]
+      ["Entregues hoje", String(hoje.length), fmtT(sum(hoje, function (i) { return i.toneladas; })) + " descarregadas"]
     ];
     $("tiles").replaceChildren.apply($("tiles"), defs.map(function (d) {
       return h("div", { class: "tile" }, h("div", { class: "lbl" }, d[0]), h("div", { class: "val" }, d[1]), h("div", { class: "note" }, d[2]));
