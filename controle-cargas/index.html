@@ -638,7 +638,6 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
     var info = h("div", {},
       h("div", { class: "num" }, "Contrato " + c.numero),
       h("div", { class: "meta" }, h("span", {}, c.parte || "Parte não informada"), h("span", {}, c.produto || ""),
-        c.prazo ? h("span", {}, "até " + fmtDate(c.prazo)) : null,
         Number(c.frete) > 0 ? h("span", {}, "Frete " + fmtBRL(c.frete) + "/t") : null,
         liberadoTons(c.id) > 0 ? h("span", {}, "Liberado " + fmtT(liberadoTons(c.id))) : null),
       c.obs ? h("div", { class: "meta" }, c.obs) : null);
@@ -784,7 +783,6 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
         fld("k-parte", "Produtor ou fornecedor", inp("k-parte", "text", v.parte, { autocomplete: "off" }), "span2"),
         fld("k-ton", "Quantidade contratada (toneladas)", inp("k-ton", "number", v.toneladas, { min: "0", step: "0.001", inputmode: "decimal" })),
         fld("k-frete", "Frete (R$ por tonelada)", inp("k-frete", "number", v.frete, { min: "0", step: "0.01", inputmode: "decimal" })),
-        fld("k-prazo", "Entregar até", inp("k-prazo", "date", v.prazo)),
         fld("k-status", "Situação", sel("k-status", [["aberto", "Aberto"], ["encerrado", "Encerrado"]], v.status || "aberto")),
         fld("k-obs", "Observações", h("textarea", { id: "k-obs" }, v.obs || ""), "span2")),
       err,
@@ -800,7 +798,7 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
       if (ton > 20000 && !avisado) { avisado = true; err.textContent = "São " + fmtT(ton) + ". Confira se o valor está mesmo em toneladas (e não em quilos ou sacas). Toque em Salvar de novo para manter."; return; }
       var data = Object.assign(c ? stripId(c) : {}, {
         numero: g("k-num"), produto: $("k-produto").value, parte: g("k-parte"), toneladas: ton, frete: frete > 0 ? frete : 0,
-        prazo: g("k-prazo") || null, status: $("k-status").value, obs: g("k-obs")
+        status: $("k-status").value, obs: g("k-obs")
       });
       $("k-save").disabled = true; err.textContent = "";
       var ok = await saveContrato(c ? c.id : null, data);
@@ -1121,8 +1119,7 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
         return h("div", { class: "pick" },
           h("div", { class: "info" },
             h("div", { class: "num" }, "Contrato " + c.numero + (c.parte ? " · " + c.parte : "")),
-            h("div", { class: "meta" }, h("span", {}, c.produto || ""), h("span", {}, "Saldo " + fmtT(s) + " de " + fmtT(c.toneladas)),
-              c.prazo ? h("span", {}, "até " + fmtDate(c.prazo)) : null),
+            h("div", { class: "meta" }, h("span", {}, c.produto || ""), h("span", {}, "Saldo " + fmtT(s) + " de " + fmtT(c.toneladas))),
             excede ? h("div", { class: "warn" }, s > 0 ? "Esta carga passa do saldo em " + fmtT(o.tons - s) + "." : "Contrato sem saldo.") : null),
           h("button", { class: "btn primary small", type: "button", onclick: function () { o.onPick(c); } }, "Vincular"));
       });
