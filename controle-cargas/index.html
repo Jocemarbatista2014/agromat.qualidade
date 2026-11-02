@@ -728,7 +728,7 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
     var editing = !!it, v = it || { data: ymd(), produto: "Soja", destino: "", status: "agendada" };
     var ctrOpts = [["", "Sem contrato"]].concat(contratos.filter(function (c) { return c.status !== "encerrado" || c.id === v.contratoId; })
       .map(function (c) { return [c.id, c.numero + (c.parte ? " · " + c.parte : "")]; }));
-    var err = h("div", { class: "err", id: "form-err" });
+    var err = h("div", { class: "err", id: "form-err" }), dupOk = null;
     var form = h("form", { class: "sheet", id: "carga-form", novalidate: true, role: "dialog", "aria-modal": "true", "aria-labelledby": "form-title" },
       h("h2", { id: "form-title" }, editing ? "Editar carga" : "Nova carga"),
       h("div", { class: "grid2" },
@@ -756,6 +756,12 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
       if (!g("c-data")) { err.textContent = "Informe a data."; return; }
       if (!g("c-origem") || !g("c-destino")) { err.textContent = "Informe a origem e o destino."; return; }
       if (!(ton > 0)) { err.textContent = "Informe as toneladas da carga."; return; }
+      var dd = achaPlaca(g("c-placa"), it ? it.id : null);
+      if (dd.length && placaAtiva(dd) && dupOk !== normPlaca(g("c-placa"))) {
+        dupOk = normPlaca(g("c-placa"));
+        err.textContent = "Atenção: a placa " + dupOk + " já foi enviada em " + descCarga(dd[0]) + ". Toque em Salvar de novo para manter.";
+        return;
+      }
       var data = Object.assign(it ? stripId(it) : {}, {
         data: g("c-data"), produto: $("c-produto").value, origem: g("c-origem"), destino: g("c-destino"),
         motorista: g("c-motorista"), placa: g("c-placa").toUpperCase(), transportadora: g("c-transp"),
@@ -1146,6 +1152,20 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
       } });
   }
 
+  /* ---------- placa já enviada ---------- */
+  function achaPlaca(p, excl) {
+    p = normPlaca(p);
+    if (!p) return [];
+    return items.filter(function (i) { return !i.exemplo && i.id !== excl && normPlaca(i.placa) === p; })
+      .sort(function (a, b) { return String(b.data || "").localeCompare(String(a.data || "")); });
+  }
+  function descCarga(i) {
+    var c = i.contratoId ? contratoById(i.contratoId) : null;
+    return (c ? "contrato " + c.numero + (c.parte ? " (" + c.parte + ")" : "") : "sem contrato") + " · " + fmtT(i.toneladas) + " · " +
+      fmtDateFull(i.data) + " · " + ((STATUS[i.status] || {}).label || "");
+  }
+  function placaAtiva(lista) { return lista.some(function (i) { return OPEN.indexOf(i.status) >= 0 || i.data === ymd(); }); }
+
   /* ---------- ordem de carregamento ---------- */
   var st = null;
   function normPlaca(s) { return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7); }
@@ -1257,6 +1277,8 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
       put(box, 
         st.preview ? h("img", { class: "thumb", src: st.preview, alt: "Ordem enviada" }) : null,
         o.avisos.length ? h("div", { class: "warnbox" }, "Confira antes de continuar:", h("ul", {}, o.avisos.map(function (a) { return h("li", {}, a); }))) : null,
+        achaPlaca(o.placa).length ? h("div", { class: "warnbox" }, "A placa " + o.placa + " já foi enviada:",
+          h("ul", {}, achaPlaca(o.placa).slice(0, 3).map(function (i) { return h("li", {}, descCarga(i)); }))) : null,
         h("div", { class: "grid2" },
           fld("o-placa", "Placa" + (o.miss.placa ? " (não encontrada)" : ""), inp("o-placa", "text", o.placa, { maxlength: "8", autocomplete: "off", class: "upper" }), o.miss.placa ? "missing" : ""),
           fld("o-peso", "Peso (toneladas)" + (o.miss.peso ? " (não encontrado)" : ""), inp("o-peso", "number", o.peso, { min: "0", step: "0.001", inputmode: "decimal" }), o.miss.peso ? "missing" : ""),
@@ -1283,6 +1305,12 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
     var o = st.ord, ton = parseFloat(o.peso), err = $("od-err");
     if (!o.placa) { err.textContent = "Informe a placa."; return; }
     if (!(ton > 0)) { err.textContent = "Informe o peso em toneladas."; return; }
+    var dups = achaPlaca(o.placa);
+    if (dups.length && placaAtiva(dups) && st.dupOk !== o.placa) {
+      st.dupOk = o.placa;
+      err.textContent = "Atenção: a placa " + o.placa + " já foi enviada em " + descCarga(dups[0]) + ". Toque em Escolher contrato de novo para continuar.";
+      return;
+    }
     openPicker({ produto: o.produto, tons: ton, resumo: "Placa " + o.placa + " · " + fmtT(ton) + (o.transp ? " · " + o.transp : ""),
       onBack: drawOrdem,
       onSkip: function () { saveOrdem(null); },
