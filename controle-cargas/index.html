@@ -506,7 +506,7 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
     if (!items.length) {
       var btns = h("div", { class: "btns" });
       if (canWrite) {
-        if (sampleFn && imgLimits) btns.append(h("button", { class: "btn primary", type: "button", onclick: openOrdem }, "Enviar ordem de carregamento"));
+        btns.append(h("button", { class: "btn primary", type: "button", onclick: openOrdem }, "Enviar ordem de carregamento"));
         btns.append(h("button", { class: "btn", type: "button", onclick: function () { openForm(null); } }, "Lançar carga manualmente"),
           isEditor ? h("button", { class: "btn", type: "button", onclick: loadSamples }, "Carregar exemplos para testar") : null);
       }
@@ -692,12 +692,12 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
     $("tiles").hidden = !cargasTab; $("toolbar").hidden = tab === "contratos";
     $("btn-new").hidden = !cargasTab || !canWrite || noDb;
     $("btn-newc").hidden = tab !== "contratos" || !canWrite || noDb;
-    $("btn-ordem").hidden = !(cargasTab && canWrite && !noDb && sampleFn && imgLimits);
+    $("btn-ordem").hidden = !(cargasTab && canWrite && !noDb);
     $("banner").replaceChildren();
     if (!noDb && loaded && (!canWrite || !(sampleFn && imgLimits))) {
       $("banner").append(h("div", { class: "warnbox" }, !canWrite
         ? "Você está só visualizando. Para lançar cargas e enviar ordens de carregamento, peça ao responsável o acesso de Colaborador a este app e entre com a sua conta."
-        : "A leitura automática da ordem de carregamento não está disponível para a sua conta. Use “Nova carga” para lançar manualmente."));
+        : "A leitura automática da ordem não está disponível para a sua conta. Você pode enviar a ordem normalmente: anexe o arquivo e digite a placa, o peso e a transportadora."));
     }
     if (noDb) {
       $("list").replaceChildren(h("div", { class: "empty" }, h("h2", {}, "Entre para ver os dados"),
@@ -1204,11 +1204,11 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
     return pdfReady;
   }
   async function toImages(file) {
-    var types = imgLimits.mediaTypes || [];
+    var types = (imgLimits && imgLimits.mediaTypes) || [];
     if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
       var lib = await loadPdfJs();
       var pdf = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
-      var out = [], n = Math.min(pdf.numPages, 2, imgLimits.maxCount || 2);
+      var out = [], n = Math.min(pdf.numPages, 2, (imgLimits && imgLimits.maxCount) || 2);
       for (var i = 1; i <= n; i++) {
         var page = await pdf.getPage(i), vp = page.getViewport({ scale: 1.6 });
         var cv = document.createElement("canvas"); cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
@@ -1239,6 +1239,11 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
       if (ctl.signal.aborted) return;
       if (prevUrl) { try { URL.revokeObjectURL(prevUrl); } catch (e) {} }
       prevUrl = URL.createObjectURL(blobs[0]); st.preview = prevUrl; drawOrdem();
+      if (!sampleFn || !imgLimits) {
+        ordCtl = null; st.ord = normalize({});
+        st.ord.avisos = ["A leitura automática não está disponível na sua conta. Olhe a ordem e preencha a placa, o peso e a transportadora."];
+        st.phase = "review"; drawOrdem(); return;
+      }
       var data = await sampleFn.json(ORDEM_PROMPT, { images: blobs, signal: ctl.signal });
       if (ctl.signal.aborted) return;
       ordCtl = null; st.ord = normalize(data); st.phase = "review"; drawOrdem();
@@ -1258,16 +1263,16 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
     if (st.phase === "pick" || st.phase === "error") {
       var drop = h("div", { class: "drop" },
         h("strong", {}, "Envie a foto ou o PDF da ordem"),
-        h("span", { class: "muted" }, "O app lê a placa, o peso e a transportadora. Você confere tudo antes de salvar."),
+        h("span", { class: "muted" }, sampleFn && imgLimits ? "O app lê a placa, o peso e a transportadora. Você confere tudo antes de salvar." : "Anexe a ordem e digite a placa, o peso e a transportadora. O arquivo fica guardado na carga."),
         h("label", { class: "btn primary", for: "o-file" }, "Escolher arquivo"),
-        h("input", { id: "o-file", class: "vh", type: "file", accept: (imgLimits.mediaTypes || []).concat(["application/pdf"]).join(","),
+        h("input", { id: "o-file", class: "vh", type: "file", accept: ((imgLimits && imgLimits.mediaTypes) || ["image/jpeg", "image/png", "image/webp"]).concat(["application/pdf"]).join(","),
           onchange: function (e) { handleFile(e.target.files[0]); } }),
         h("span", { class: "muted" }, "ou arraste o arquivo para cá"));
       drop.addEventListener("dragover", function (e) { e.preventDefault(); drop.classList.add("over"); });
       drop.addEventListener("dragleave", function () { drop.classList.remove("over"); });
       drop.addEventListener("drop", function (e) { e.preventDefault(); drop.classList.remove("over"); handleFile(e.dataTransfer.files[0]); });
       put(box, st.err ? h("div", { class: "warnbox" }, st.err) : null, drop,
-        h("p", { class: "muted" }, "A imagem é enviada ao Claude para a leitura e o arquivo fica guardado na carga, para consulta pelo botão Ver ordem."),
+        h("p", { class: "muted" }, (sampleFn && imgLimits ? "A imagem é enviada ao Claude para a leitura e o arquivo" : "O arquivo") + " fica guardado na carga, para consulta pelo botão Ver ordem."),
         h("div", { class: "foot" },
           h("button", { class: "btn", type: "button", onclick: function () { closeSheet(); openForm(null); } }, "Lançar manualmente"),
           h("button", { class: "btn", type: "button", onclick: closeSheet }, "Cancelar")));
@@ -1345,7 +1350,6 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
     }
   }
   function openOrdem() {
-    if (!sampleFn || !imgLimits) return;
     st = { phase: "pick", err: "", preview: null, ord: null };
     drawOrdem();
   }
