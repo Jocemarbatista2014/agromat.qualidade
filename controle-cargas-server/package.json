@@ -1,0 +1,10 @@
+{
+  "name": "controle-cargas-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Controle de Cargas (Agromat) - servidor próprio com login por código e leitura de ordem via API da Anthropic",
+  "main": "server.js",
+  "scripts": { "start": "node server.js", "build": "node build.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": { "better-sqlite3": "^11.5.0", "express": "^4.21.0" }
+}
