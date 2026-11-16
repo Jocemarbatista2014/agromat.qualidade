@@ -693,9 +693,14 @@ details.more summary { cursor: pointer; color: var(--muted); font-size: 14px; ma
     $("btn-newc").hidden = tab !== "contratos" || !canWrite || noDb;
     $("btn-ordem").hidden = !(cargasTab && canWrite && !noDb && sampleFn && imgLimits);
     $("banner").replaceChildren();
+    if (!noDb && loaded && (!canWrite || !(sampleFn && imgLimits))) {
+      $("banner").append(h("div", { class: "warnbox" }, !canWrite
+        ? "Você está só visualizando. Para lançar cargas e enviar ordens de carregamento, peça ao responsável o acesso de Colaborador a este app e entre com a sua conta."
+        : "A leitura automática da ordem de carregamento não está disponível para a sua conta. Use “Nova carga” para lançar manualmente."));
+    }
     if (noDb) {
       $("list").replaceChildren(h("div", { class: "empty" }, h("h2", {}, "Entre para ver os dados"),
-        h("p", {}, "Os dados ficam salvos para toda a equipe. Abra este app com a sua conta para consultar e lançar cargas.")));
+        h("p", {}, "Os dados ficam salvos para toda a equipe. Entre no Claude com a conta convidada e abra o link de novo. Se ainda não aparecer, peça ao responsável para te convidar como Colaborador.")));
       return;
     }
     if (cargasTab) { renderTiles(); renderCargas(); } else if (tab === "relatorio") renderRelatorio(); else renderContratos();
